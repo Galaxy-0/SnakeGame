@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国象棋</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #2c1810 0%, #1a0f0a 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .game-container {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+        .board-wrapper {
+            background: #d4a460;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        canvas {
+            display: block;
+        }
+        .side-panel {
+            color: #fff;
+            width: 200px;
+        }
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #d4a460;
+            text-shadow: 0 0 10px rgba(212, 164, 96, 0.5);
+        }
+        .turn-indicator {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .turn-label {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .turn-text {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .turn-red { color: #ff4444; }
+        .turn-black { color: #333; text-shadow: 0 0 5px #fff; }
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            min-height: 50px;
+        }
+        .status-text {
+            color: #ffcc00;
+            font-size: 1.1em;
+        }
+        .btn {
+            width: 100%;
+            background: #d4a460;
+            color: #1a0f0a;
+            border: none;
+            padding: 12px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            background: #e6b870;
+            transform: scale(1.02);
+        }
+        .rules {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 0.85em;
+            color: #888;
+            line-height: 1.6;
+        }
+        .rules h3 {
+            color: #d4a460;
+            margin-bottom: 10px;
+        }
+        .winner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .winner-overlay.hidden {
+            display: none;
+        }
+        .winner-modal {
+            text-align: center;
+            padding: 50px;
+        }
+        .winner-modal h2 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        .winner-red { color: #ff4444; }
+        .winner-black { color: #fff; }
+        .winner-modal p {
+            color: #888;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="board-wrapper">
+            <canvas id="board" width="460" height="510"></canvas>
+        </div>
+        <div class="side-panel">
+            <h1>中国象棋</h1>
+            <div class="turn-indicator">
+                <div class="turn-label">当前回合</div>
+                <div class="turn-text turn-red" id="turnText">红方</div>
+            </div>
+            <div class="status">
+                <div class="status-text" id="statusText">请选择棋子</div>
+            </div>
+            <button class="btn" onclick="restartGame()">重新开始</button>
+            <button class="btn" onclick="undoMove()">悔棋</button>
+            <div class="rules">
+                <h3>操作说明</h3>
+                点击选择己方棋子<br>
+                再点击目标位置移动<br>
+                吃掉对方"将"或"帅"获胜
+            </div>
+        </div>
+    </div>
+
+    <div class="winner-overlay hidden" id="winnerOverlay">
+        <div class="winner-modal">
+            <h2 id="winnerTitle"></h2>
+            <p>游戏结束</p>
+            <button class="btn" onclick="restartGame()">再来一局</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('board');
+        const ctx = canvas.getContext('2d');
+
+        const GRID_SIZE = 50;
+        const OFFSET_X = 30;
+        const OFFSET_Y = 30;
+        const PIECE_RADIUS = 22;
+
+        // 棋子类型
+        const PIECES = {
+            R_JIANG: '帅', R_SHI: '仕', R_XIANG: '相', R_MA: '馬', R_CHE: '車', R_PAO: '炮', R_BING: '兵',
+            B_JIANG: '将', B_SHI: '士', B_XIANG: '象', B_MA: '马', B_CHE: '车', B_PAO: '砲', B_BING: '卒'
+        };
+
+        let board = [];
+        let currentTurn = 'red';
+        let selectedPiece = null;
+        let validMoves = [];
+        let moveHistory = [];
+
+        // 初始化棋盘
+        function initBoard() {
+            board = Array(10).fill(null).map(() => Array(9).fill(null));
+
+            // 黑方（上方）
+            board[0][0] = { type: 'che', color: 'black', name: '车' };
+            board[0][1] = { type: 'ma', color: 'black', name: '马' };
+            board[0][2] = { type: 'xiang', color: 'black', name: '象' };
+            board[0][3] = { type: 'shi', color: 'black', name: '士' };
+            board[0][4] = { type: 'jiang', color: 'black', name: '将' };
+            board[0][5] = { type: 'shi', color: 'black', name: '士' };
+            board[0][6] = { type: 'xiang', color: 'black', name: '象' };
+            board[0][7] = { type: 'ma', color: 'black', name: '马' };
+            board[0][8] = { type: 'che', color: 'black', name: '车' };
+            board[2][1] = { type: 'pao', color: 'black', name: '砲' };
+            board[2][7] = { type: 'pao', color: 'black', name: '砲' };
+            board[3][0] = { type: 'bing', color: 'black', name: '卒' };
+            board[3][2] = { type: 'bing', color: 'black', name: '卒' };
+            board[3][4] = { type: 'bing', color: 'black', name: '卒' };
+            board[3][6] = { type: 'bing', color: 'black', name: '卒' };
+            board[3][8] = { type: 'bing', color: 'black', name: '卒' };
+
+            // 红方（下方）
+            board[9][0] = { type: 'che', color: 'red', name: '車' };
+            board[9][1] = { type: 'ma', color: 'red', name: '馬' };
+            board[9][2] = { type: 'xiang', color: 'red', name: '相' };
+            board[9][3] = { type: 'shi', color: 'red', name: '仕' };
+            board[9][4] = { type: 'jiang', color: 'red', name: '帅' };
+            board[9][5] = { type: 'shi', color: 'red', name: '仕' };
+            board[9][6] = { type: 'xiang', color: 'red', name: '相' };
+            board[9][7] = { type: 'ma', color: 'red', name: '馬' };
+            board[9][8] = { type: 'che', color: 'red', name: '車' };
+            board[7][1] = { type: 'pao', color: 'red', name: '炮' };
+            board[7][7] = { type: 'pao', color: 'red', name: '炮' };
+            board[6][0] = { type: 'bing', color: 'red', name: '兵' };
+            board[6][2] = { type: 'bing', color: 'red', name: '兵' };
+            board[6][4] = { type: 'bing', color: 'red', name: '兵' };
+            board[6][6] = { type: 'bing', color: 'red', name: '兵' };
+            board[6][8] = { type: 'bing', color: 'red', name: '兵' };
+
+            currentTurn = 'red';
+            selectedPiece = null;
+            validMoves = [];
+            moveHistory = [];
+            updateTurnDisplay();
+            setStatus('请选择棋子');
+        }
+
+        function drawBoard() {
+            // 背景
+            ctx.fillStyle = '#d4a460';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#5c3d2e';
+            ctx.lineWidth = 1;
+
+            // 画横线
+            for (let i = 0; i < 10; i++) {
+                ctx.beginPath();
+                ctx.moveTo(OFFSET_X, OFFSET_Y + i * GRID_SIZE);
+                ctx.lineTo(OFFSET_X + 8 * GRID_SIZE, OFFSET_Y + i * GRID_SIZE);
+                ctx.stroke();
+            }
+
+            // 画竖线（上半部分）
+            for (let i = 0; i < 9; i++) {
+                ctx.beginPath();
+                ctx.moveTo(OFFSET_X + i * GRID_SIZE, OFFSET_Y);
+                ctx.lineTo(OFFSET_X + i * GRID_SIZE, OFFSET_Y + 4 * GRID_SIZE);
+                ctx.stroke();
+            }
+
+            // 画竖线（下半部分）
+            for (let i = 0; i < 9; i++) {
+                ctx.beginPath();
+                ctx.moveTo(OFFSET_X + i * GRID_SIZE, OFFSET_Y + 5 * GRID_SIZE);
+                ctx.lineTo(OFFSET_X + i * GRID_SIZE, OFFSET_Y + 9 * GRID_SIZE);
+                ctx.stroke();
+            }
+
+            // 边框竖线（楚河汉界两侧）
+            ctx.beginPath();
+            ctx.moveTo(OFFSET_X, OFFSET_Y + 4 * GRID_SIZE);
+            ctx.lineTo(OFFSET_X, OFFSET_Y + 5 * GRID_SIZE);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(OFFSET_X + 8 * GRID_SIZE, OFFSET_Y + 4 * GRID_SIZE);
+            ctx.lineTo(OFFSET_X + 8 * GRID_SIZE, OFFSET_Y + 5 * GRID_SIZE);
+            ctx.stroke();
+
+            // 九宫格斜线
+            // 上方
+            ctx.beginPath();
+            ctx.moveTo(OFFSET_X + 3 * GRID_SIZE, OFFSET_Y);
+            ctx.lineTo(OFFSET_X + 5 * GRID_SIZE, OFFSET_Y + 2 * GRID_SIZE);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(OFFSET_X + 5 * GRID_SIZE, OFFSET_Y);
+            ctx.lineTo(OFFSET_X + 3 * GRID_SIZE, OFFSET_Y + 2 * GRID_SIZE);
+            ctx.stroke();
+
+            // 下方
+            ctx.beginPath();
+            ctx.moveTo(OFFSET_X + 3 * GRID_SIZE, OFFSET_Y + 7 * GRID_SIZE);
+            ctx.lineTo(OFFSET_X + 5 * GRID_SIZE, OFFSET_Y + 9 * GRID_SIZE);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(OFFSET_X + 5 * GRID_SIZE, OFFSET_Y + 7 * GRID_SIZE);
+            ctx.lineTo(OFFSET_X + 3 * GRID_SIZE, OFFSET_Y + 9 * GRID_SIZE);
+            ctx.stroke();
+
+            // 楚河汉界
+            ctx.font = 'bold 28px serif';
+            ctx.fillStyle = '#5c3d2e';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('楚 河', OFFSET_X + 2 * GRID_SIZE, OFFSET_Y + 4.5 * GRID_SIZE);
+            ctx.fillText('汉 界', OFFSET_X + 6 * GRID_SIZE, OFFSET_Y + 4.5 * GRID_SIZE);
+        }
+
+        function drawPieces() {
+            for (let row = 0; row < 10; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const piece = board[row][col];
+                    if (piece) {
+                        drawPiece(row, col, piece);
+                    }
+                }
+            }
+
+            // 画选中效果
+            if (selectedPiece) {
+                const x = OFFSET_X + selectedPiece.col * GRID_SIZE;
+                const y = OFFSET_Y + selectedPiece.row * GRID_SIZE;
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(x, y, PIECE_RADIUS + 3, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 画可移动位置
+            validMoves.forEach(move => {
+                const x = OFFSET_X + move.col * GRID_SIZE;
+                const y = OFFSET_Y + move.row * GRID_SIZE;
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.fill();
+                if (board[move.row][move.col]) {
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(x, y, PIECE_RADIUS + 3, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawPiece(row, col, piece) {
+            const x = OFFSET_X + col * GRID_SIZE;
+            const y = OFFSET_Y + row * GRID_SIZE;
+
+            // 棋子底色
+            ctx.beginPath();
+            ctx.arc(x, y, PIECE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = '#f5deb3';
+            ctx.fill();
+            ctx.strokeStyle = '#8b4513';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 内圈
+            ctx.beginPath();
+            ctx.arc(x, y, PIECE_RADIUS - 4, 0, Math.PI * 2);
+            ctx.strokeStyle = piece.color === 'red' ? '#cc0000' : '#333';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // 文字
+            ctx.font = 'bold 24px serif';
+            ctx.fillStyle = piece.color === 'red' ? '#cc0000' : '#333';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(piece.name, x, y + 1);
+        }
+
+        function getValidMoves(row, col) {
+            const piece = board[row][col];
+            if (!piece) return [];
+
+            const moves = [];
+            const color = piece.color;
+            const isRed = color === 'red';
+
+            switch (piece.type) {
+                case 'jiang':
+                    // 将/帅：九宫内一步
+                    const jiangMoves = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+                    const jiangRowMin = isRed ? 7 : 0;
+                    const jiangRowMax = isRed ? 9 : 2;
+                    jiangMoves.forEach(([dr, dc]) => {
+                        const nr = row + dr, nc = col + dc;
+                        if (nr >= jiangRowMin && nr <= jiangRowMax && nc >= 3 && nc <= 5) {
+                            if (!board[nr][nc] || board[nr][nc].color !== color) {
+                                moves.push({ row: nr, col: nc });
+                            }
+                        }
+                    });
+                    // 将帅对面
+                    let facing = true;
+                    for (let r = (isRed ? row - 1 : row + 1); isRed ? r >= 0 : r <= 9; isRed ? r-- : r++) {
+                        if (board[r][col]) {
+                            if (board[r][col].type === 'jiang' && board[r][col].color !== color) {
+                                moves.push({ row: r, col: col });
+                            }
+                            break;
+                        }
+                    }
+                    break;
+
+                case 'shi':
+                    // 士/仕：九宫内斜走
+                    const shiMoves = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+                    const shiRowMin = isRed ? 7 : 0;
+                    const shiRowMax = isRed ? 9 : 2;
+                    shiMoves.forEach(([dr, dc]) => {
+                        const nr = row + dr, nc = col + dc;
+                        if (nr >= shiRowMin && nr <= shiRowMax && nc >= 3 && nc <= 5) {
+                            if (!board[nr][nc] || board[nr][nc].color !== color) {
+                                moves.push({ row: nr, col: nc });
+                            }
+                        }
+                    });
+                    break;
+
+                case 'xiang':
+                    // 象/相：走田字，不能过河
+                    const xiangMoves = [[2, 2], [2, -2], [-2, 2], [-2, -2]];
+                    const xiangBlocks = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+                    xiangMoves.forEach(([dr, dc], i) => {
+                        const nr = row + dr, nc = col + dc;
+                        const br = row + xiangBlocks[i][0], bc = col + xiangBlocks[i][1];
+                        const riverLimit = isRed ? 4 : 5;
+                        if (nc >= 0 && nc <= 8 && (isRed ? nr >= 5 : nr <= 4)) {
+                            if (!board[br][bc]) {
+                                if (!board[nr][nc] || board[nr][nc].color !== color) {
+                                    moves.push({ row: nr, col: nc });
+                                }
+                            }
+                        }
+                    });
+                    break;
+
+                case 'ma':
+                    // 马：走日字，蹩脚
+                    const maMoves = [
+                        [-2, -1, -1, 0], [-2, 1, -1, 0],
+                        [2, -1, 1, 0], [2, 1, 1, 0],
+                        [-1, -2, 0, -1], [1, -2, 0, -1],
+                        [-1, 2, 0, 1], [1, 2, 0, 1]
+                    ];
+                    maMoves.forEach(([dr, dc, br, bc]) => {
+                        const nr = row + dr, nc = col + dc;
+                        const blockR = row + br, blockC = col + bc;
+                        if (nr >= 0 && nr <= 9 && nc >= 0 && nc <= 8) {
+                            if (!board[blockR][blockC]) {
+                                if (!board[nr][nc] || board[nr][nc].color !== color) {
+                                    moves.push({ row: nr, col: nc });
+                                }
+                            }
+                        }
+                    });
+                    break;
+
+                case 'che':
+                    // 车：直线走
+                    [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                        let nr = row + dr, nc = col + dc;
+                        while (nr >= 0 && nr <= 9 && nc >= 0 && nc <= 8) {
+                            if (!board[nr][nc]) {
+                                moves.push({ row: nr, col: nc });
+                            } else {
+                                if (board[nr][nc].color !== color) {
+                                    moves.push({ row: nr, col: nc });
+                                }
+                                break;
+                            }
+                            nr += dr;
+                            nc += dc;
+                        }
+                    });
+                    break;
+
+                case 'pao':
+                    // 炮：直线走，隔子吃
+                    [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                        let nr = row + dr, nc = col + dc;
+                        let jumped = false;
+                        while (nr >= 0 && nr <= 9 && nc >= 0 && nc <= 8) {
+                            if (!board[nr][nc]) {
+                                if (!jumped) moves.push({ row: nr, col: nc });
+                            } else {
+                                if (!jumped) {
+                                    jumped = true;
+                                } else {
+                                    if (board[nr][nc].color !== color) {
+                                        moves.push({ row: nr, col: nc });
+                                    }
+                                    break;
+                                }
+                            }
+                            nr += dr;
+                            nc += dc;
+                        }
+                    });
+                    break;
+
+                case 'bing':
+                    // 兵/卒
+                    const forward = isRed ? -1 : 1;
+                    const crossed = isRed ? row <= 4 : row >= 5;
+
+                    // 前进
+                    const fr = row + forward;
+                    if (fr >= 0 && fr <= 9) {
+                        if (!board[fr][col] || board[fr][col].color !== color) {
+                            moves.push({ row: fr, col: col });
+                        }
+                    }
+
+                    // 过河后可以左右
+                    if (crossed) {
+                        [[-1], [1]].forEach(([dc]) => {
+                            const nc = col + dc;
+                            if (nc >= 0 && nc <= 8) {
+                                if (!board[row][nc] || board[row][nc].color !== color) {
+                                    moves.push({ row: row, col: nc });
+                                }
+                            }
+                        });
+                    }
+                    break;
+            }
+
+            return moves;
+        }
+
+        function handleClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const col = Math.round((x - OFFSET_X) / GRID_SIZE);
+            const row = Math.round((y - OFFSET_Y) / GRID_SIZE);
+
+            if (row < 0 || row > 9 || col < 0 || col > 8) return;
+
+            const clickedPiece = board[row][col];
+
+            if (selectedPiece) {
+                // 检查是否是有效移动
+                const isValidMove = validMoves.some(m => m.row === row && m.col === col);
+
+                if (isValidMove) {
+                    // 移动棋子
+                    const captured = board[row][col];
+                    moveHistory.push({
+                        from: { row: selectedPiece.row, col: selectedPiece.col },
+                        to: { row, col },
+                        piece: board[selectedPiece.row][selectedPiece.col],
+                        captured: captured
+                    });
+
+                    board[row][col] = board[selectedPiece.row][selectedPiece.col];
+                    board[selectedPiece.row][selectedPiece.col] = null;
+
+                    // 检查胜利
+                    if (captured && captured.type === 'jiang') {
+                        showWinner(currentTurn);
+                    }
+
+                    selectedPiece = null;
+                    validMoves = [];
+                    currentTurn = currentTurn === 'red' ? 'black' : 'red';
+                    updateTurnDisplay();
+                    setStatus('请选择棋子');
+                } else if (clickedPiece && clickedPiece.color === currentTurn) {
+                    // 选择另一个己方棋子
+                    selectedPiece = { row, col };
+                    validMoves = getValidMoves(row, col);
+                    setStatus(`已选择 ${clickedPiece.name}`);
+                } else {
+                    // 取消选择
+                    selectedPiece = null;
+                    validMoves = [];
+                    setStatus('请选择棋子');
+                }
+            } else {
+                // 选择棋子
+                if (clickedPiece && clickedPiece.color === currentTurn) {
+                    selectedPiece = { row, col };
+                    validMoves = getValidMoves(row, col);
+                    setStatus(`已选择 ${clickedPiece.name}`);
+                }
+            }
+
+            render();
+        }
+
+        function undoMove() {
+            if (moveHistory.length === 0) return;
+
+            const lastMove = moveHistory.pop();
+            board[lastMove.from.row][lastMove.from.col] = lastMove.piece;
+            board[lastMove.to.row][lastMove.to.col] = lastMove.captured;
+
+            currentTurn = currentTurn === 'red' ? 'black' : 'red';
+            selectedPiece = null;
+            validMoves = [];
+            updateTurnDisplay();
+            setStatus('已悔棋');
+            render();
+        }
+
+        function showWinner(winner) {
+            const overlay = document.getElementById('winnerOverlay');
+            const title = document.getElementById('winnerTitle');
+            title.textContent = winner === 'red' ? '红方获胜！' : '黑方获胜！';
+            title.className = winner === 'red' ? 'winner-red' : 'winner-black';
+            overlay.classList.remove('hidden');
+        }
+
+        function updateTurnDisplay() {
+            const turnText = document.getElementById('turnText');
+            turnText.textContent = currentTurn === 'red' ? '红方' : '黑方';
+            turnText.className = currentTurn === 'red' ? 'turn-text turn-red' : 'turn-text turn-black';
+        }
+
+        function setStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function render() {
+            drawBoard();
+            drawPieces();
+        }
+
+        function restartGame() {
+            document.getElementById('winnerOverlay').classList.add('hidden');
+            initBoard();
+            render();
+        }
+
+        canvas.addEventListener('click', handleClick);
+
+        initBoard();
+        render();
+    </script>
+</body>
+</html>

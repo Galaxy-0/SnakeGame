@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谁是卧底</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .game-container {
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #ff6b6b;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .btn {
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #3db892;
+            transform: scale(1.05);
+        }
+        .btn-danger {
+            background: #ff6b6b;
+        }
+        .btn-danger:hover {
+            background: #ff5252;
+        }
+        .btn-secondary {
+            background: #666;
+            color: #fff;
+        }
+        .btn-secondary:hover {
+            background: #555;
+        }
+        .player-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .player-card {
+            background: rgba(78, 204, 163, 0.1);
+            border: 2px solid #4ecca3;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .player-card:hover {
+            background: rgba(78, 204, 163, 0.2);
+            transform: translateY(-2px);
+        }
+        .player-card.revealed {
+            background: rgba(255, 107, 107, 0.1);
+            border-color: #ff6b6b;
+        }
+        .player-card.eliminated {
+            opacity: 0.4;
+            pointer-events: none;
+            text-decoration: line-through;
+        }
+        .player-name {
+            color: #4ecca3;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        .player-word {
+            color: #fff;
+            font-size: 1.5em;
+            margin-top: 10px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            display: none;
+        }
+        .player-word.show {
+            display: block;
+        }
+        .click-hint {
+            color: #888;
+            font-size: 0.9em;
+            margin-top: 8px;
+        }
+        .phase-title {
+            color: #fff;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+        .phase-desc {
+            color: #aaa;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        .vote-btn {
+            width: 100%;
+            padding: 15px;
+            margin: 8px 0;
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid #ff6b6b;
+            color: #fff;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .vote-btn:hover {
+            background: rgba(255, 107, 107, 0.4);
+        }
+        .vote-btn.selected {
+            background: #ff6b6b;
+            color: #1a1a2e;
+        }
+        .result-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+        .result-text {
+            color: #fff;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+        }
+        .result-detail {
+            color: #aaa;
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            line-height: 1.8;
+        }
+        .words-reveal {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .words-reveal p {
+            color: #fff;
+            margin: 8px 0;
+        }
+        .words-reveal span {
+            color: #4ecca3;
+            font-weight: bold;
+        }
+        .round-info {
+            color: #4ecca3;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }
+        .rules {
+            text-align: left;
+            color: #aaa;
+            line-height: 1.8;
+        }
+        .rules h3 {
+            color: #4ecca3;
+            margin-bottom: 10px;
+        }
+        .rules li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- 开始界面 -->
+        <div id="startScreen">
+            <h1>谁是卧底</h1>
+            <p class="subtitle">3人版</p>
+            <div class="card">
+                <div class="rules">
+                    <h3>游戏规则</h3>
+                    <ul>
+                        <li>3名玩家中有 <strong>2名平民</strong> 和 <strong>1名卧底</strong></li>
+                        <li>平民拿到相同的词，卧底拿到相似但不同的词</li>
+                        <li>每轮玩家轮流用一句话描述自己的词（不能直接说出）</li>
+                        <li>描述结束后投票，票数最多的人出局</li>
+                        <li>卧底被投出 → 平民获胜</li>
+                        <li>平民只剩1人 → 卧底获胜</li>
+                    </ul>
+                </div>
+            </div>
+            <button class="btn" onclick="startGame()">开始游戏</button>
+        </div>
+
+        <!-- 查看词语阶段 -->
+        <div id="wordPhase" style="display: none;">
+            <h1>谁是卧底</h1>
+            <div class="card">
+                <p class="phase-title">🔍 查看词语</p>
+                <p class="phase-desc">每位玩家点击自己的名字查看词语<br>看完后再点击一次隐藏</p>
+                <div class="player-cards" id="playerCards"></div>
+            </div>
+            <button class="btn" onclick="startDescribe()">所有人已看完，开始描述</button>
+        </div>
+
+        <!-- 描述阶段 -->
+        <div id="describePhase" style="display: none;">
+            <h1>谁是卧底</h1>
+            <div class="card">
+                <p class="round-info" id="roundInfo"></p>
+                <p class="phase-title">💬 描述阶段</p>
+                <p class="phase-desc">
+                    请按顺序用<strong>一句话</strong>描述你的词语<br>
+                    不能直接说出词语本身！<br><br>
+                    <span id="currentOrder"></span>
+                </p>
+            </div>
+            <button class="btn" onclick="startVote()">描述完毕，开始投票</button>
+        </div>
+
+        <!-- 投票阶段 -->
+        <div id="votePhase" style="display: none;">
+            <h1>谁是卧底</h1>
+            <div class="card">
+                <p class="phase-title">🗳️ 投票阶段</p>
+                <p class="phase-desc">讨论后，投票选出你认为的卧底</p>
+                <div id="voteButtons"></div>
+            </div>
+            <button class="btn btn-danger" onclick="confirmVote()">确认投票结果</button>
+        </div>
+
+        <!-- 投票结果 -->
+        <div id="eliminatePhase" style="display: none;">
+            <h1>谁是卧底</h1>
+            <div class="card">
+                <p class="phase-title" id="eliminateTitle"></p>
+                <p class="phase-desc" id="eliminateDesc"></p>
+            </div>
+            <button class="btn" id="continueBtn" onclick="continueGame()">继续游戏</button>
+        </div>
+
+        <!-- 游戏结束 -->
+        <div id="resultScreen" style="display: none;">
+            <h1>谁是卧底</h1>
+            <div class="card">
+                <div class="result-icon" id="resultIcon"></div>
+                <p class="result-text" id="resultText"></p>
+                <div class="words-reveal" id="wordsReveal"></div>
+            </div>
+            <button class="btn" onclick="restartGame()">再来一局</button>
+        </div>
+    </div>
+
+    <script>
+        // 词库：[平民词, 卧底词]
+        const wordPairs = [
+            ['苹果', '梨子'],
+            ['足球', '篮球'],
+            ['包子', '饺子'],
+            ['冰箱', '空调'],
+            ['眼镜', '墨镜'],
+            ['牛奶', '豆浆'],
+            ['薯条', '薯片'],
+            ['沙发', '床'],
+            ['筷子', '叉子'],
+            ['雨伞', '阳伞'],
+            ['手机', '平板'],
+            ['咖啡', '奶茶'],
+            ['自行车', '电动车'],
+            ['口红', '唇膏'],
+            ['蛋糕', '面包'],
+            ['西瓜', '哈密瓜'],
+            ['猫', '狗'],
+            ['医生', '护士'],
+            ['警察', '保安'],
+            ['老师', '教授'],
+            ['米饭', '面条'],
+            ['可乐', '雪碧'],
+            ['微信', 'QQ'],
+            ['抖音', '快手'],
+            ['火锅', '麻辣烫'],
+            ['汉堡', '三明治'],
+            ['地铁', '公交车'],
+            ['电影', '电视剧'],
+            ['耳机', '音箱'],
+            ['钢笔', '铅笔']
+        ];
+
+        let players = [
+            { name: '玩家 1', word: '', isUndercover: false, eliminated: false },
+            { name: '玩家 2', word: '', isUndercover: false, eliminated: false },
+            { name: '玩家 3', word: '', isUndercover: false, eliminated: false }
+        ];
+
+        let currentRound = 1;
+        let votes = {};
+
+        function startGame() {
+            // 随机选择词组
+            const pair = wordPairs[Math.floor(Math.random() * wordPairs.length)];
+            const civilianWord = pair[0];
+            const undercoverWord = pair[1];
+
+            // 随机选择卧底
+            const undercoverIndex = Math.floor(Math.random() * 3);
+
+            // 分配词语
+            players.forEach((player, index) => {
+                player.eliminated = false;
+                if (index === undercoverIndex) {
+                    player.word = undercoverWord;
+                    player.isUndercover = true;
+                } else {
+                    player.word = civilianWord;
+                    player.isUndercover = false;
+                }
+            });
+
+            currentRound = 1;
+            showWordPhase();
+        }
+
+        function showWordPhase() {
+            hideAllScreens();
+            document.getElementById('wordPhase').style.display = 'block';
+
+            const container = document.getElementById('playerCards');
+            container.innerHTML = '';
+
+            players.forEach((player, index) => {
+                if (!player.eliminated) {
+                    const card = document.createElement('div');
+                    card.className = 'player-card';
+                    card.innerHTML = `
+                        <div class="player-name">${player.name}</div>
+                        <div class="click-hint">点击查看词语</div>
+                        <div class="player-word" id="word-${index}">${player.word}</div>
+                    `;
+                    card.onclick = () => toggleWord(index, card);
+                    container.appendChild(card);
+                }
+            });
+        }
+
+        function toggleWord(index, card) {
+            const wordEl = document.getElementById(`word-${index}`);
+            if (wordEl.classList.contains('show')) {
+                wordEl.classList.remove('show');
+                card.classList.remove('revealed');
+                card.querySelector('.click-hint').textContent = '点击查看词语';
+            } else {
+                wordEl.classList.add('show');
+                card.classList.add('revealed');
+                card.querySelector('.click-hint').textContent = '点击隐藏词语';
+            }
+        }
+
+        function startDescribe() {
+            hideAllScreens();
+            document.getElementById('describePhase').style.display = 'block';
+
+            document.getElementById('roundInfo').textContent = `第 ${currentRound} 轮`;
+
+            const activePlayers = players.filter(p => !p.eliminated);
+            const order = activePlayers.map(p => p.name).join(' → ');
+            document.getElementById('currentOrder').textContent = `发言顺序：${order}`;
+        }
+
+        function startVote() {
+            hideAllScreens();
+            document.getElementById('votePhase').style.display = 'block';
+
+            const container = document.getElementById('voteButtons');
+            container.innerHTML = '';
+            votes = {};
+
+            players.forEach((player, index) => {
+                if (!player.eliminated) {
+                    const btn = document.createElement('button');
+                    btn.className = 'vote-btn';
+                    btn.textContent = `投票给 ${player.name}`;
+                    btn.onclick = () => selectVote(index, btn);
+                    container.appendChild(btn);
+                    votes[index] = 0;
+                }
+            });
+        }
+
+        function selectVote(index, btn) {
+            // 切换选中状态
+            if (btn.classList.contains('selected')) {
+                btn.classList.remove('selected');
+                votes[index]--;
+            } else {
+                btn.classList.add('selected');
+                votes[index]++;
+            }
+        }
+
+        function confirmVote() {
+            // 找出票数最多的人
+            let maxVotes = 0;
+            let eliminated = [];
+
+            for (let index in votes) {
+                if (votes[index] > maxVotes) {
+                    maxVotes = votes[index];
+                    eliminated = [parseInt(index)];
+                } else if (votes[index] === maxVotes && votes[index] > 0) {
+                    eliminated.push(parseInt(index));
+                }
+            }
+
+            if (maxVotes === 0) {
+                alert('请至少投一票！');
+                return;
+            }
+
+            if (eliminated.length > 1) {
+                alert('票数相同！请重新投票或讨论后再投。');
+                return;
+            }
+
+            const eliminatedIndex = eliminated[0];
+            players[eliminatedIndex].eliminated = true;
+
+            showEliminateResult(eliminatedIndex);
+        }
+
+        function showEliminateResult(eliminatedIndex) {
+            hideAllScreens();
+            document.getElementById('eliminatePhase').style.display = 'block';
+
+            const player = players[eliminatedIndex];
+            const title = document.getElementById('eliminateTitle');
+            const desc = document.getElementById('eliminateDesc');
+
+            title.textContent = `${player.name} 被投票出局！`;
+
+            // 检查游戏是否结束
+            const remainingCivilians = players.filter(p => !p.eliminated && !p.isUndercover).length;
+            const undercoverEliminated = players.find(p => p.isUndercover).eliminated;
+
+            if (undercoverEliminated) {
+                desc.textContent = `${player.name} 就是卧底！`;
+                document.getElementById('continueBtn').textContent = '查看结果';
+                document.getElementById('continueBtn').onclick = () => showResult('civilian');
+            } else if (remainingCivilians <= 1) {
+                desc.textContent = `${player.name} 是平民...`;
+                document.getElementById('continueBtn').textContent = '查看结果';
+                document.getElementById('continueBtn').onclick = () => showResult('undercover');
+            } else {
+                desc.textContent = `${player.name} 是平民，游戏继续！`;
+                document.getElementById('continueBtn').textContent = '继续游戏';
+                document.getElementById('continueBtn').onclick = continueGame;
+            }
+        }
+
+        function continueGame() {
+            currentRound++;
+            startDescribe();
+        }
+
+        function showResult(winner) {
+            hideAllScreens();
+            document.getElementById('resultScreen').style.display = 'block';
+
+            const icon = document.getElementById('resultIcon');
+            const text = document.getElementById('resultText');
+            const reveal = document.getElementById('wordsReveal');
+
+            if (winner === 'civilian') {
+                icon.textContent = '🎉';
+                text.innerHTML = '<span style="color: #4ecca3">平民获胜！</span>';
+            } else {
+                icon.textContent = '🕵️';
+                text.innerHTML = '<span style="color: #ff6b6b">卧底获胜！</span>';
+            }
+
+            const undercover = players.find(p => p.isUndercover);
+            const civilian = players.find(p => !p.isUndercover);
+
+            reveal.innerHTML = `
+                <p>平民词语：<span>${civilian.word}</span></p>
+                <p>卧底词语：<span>${undercover.word}</span></p>
+                <p style="margin-top: 15px; color: #ff6b6b;">卧底是：<span>${undercover.name}</span></p>
+            `;
+        }
+
+        function restartGame() {
+            hideAllScreens();
+            document.getElementById('startScreen').style.display = 'block';
+        }
+
+        function hideAllScreens() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('wordPhase').style.display = 'none';
+            document.getElementById('describePhase').style.display = 'none';
+            document.getElementById('votePhase').style.display = 'none';
+            document.getElementById('eliminatePhase').style.display = 'none';
+            document.getElementById('resultScreen').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飞行棋</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .game-container { display: flex; gap: 30px; align-items: flex-start; }
+        .board-wrapper {
+            background: #f0e6d3;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        canvas { display: block; border-radius: 10px; }
+        .side-panel { color: #fff; width: 220px; }
+        h1 { font-size: 2em; margin-bottom: 20px; color: #fff; }
+        .player-select, .turn-indicator, .dice-area, .status, .rules {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        .player-select label { display: block; margin-bottom: 10px; color: #aaa; }
+        .player-select select { width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 1em; }
+        .turn-indicator { text-align: center; }
+        .turn-label { color: #888; font-size: 0.9em; margin-bottom: 8px; }
+        .turn-text { font-size: 1.4em; font-weight: bold; padding: 8px 15px; border-radius: 20px; display: inline-block; }
+        .turn-red { background: #e74c3c; }
+        .turn-yellow { background: #f1c40f; color: #333; }
+        .turn-blue { background: #3498db; }
+        .turn-green { background: #2ecc71; }
+        .dice-area { text-align: center; }
+        .dice {
+            width: 80px; height: 80px; background: #fff; border-radius: 15px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2.5em; font-weight: bold; margin: 0 auto 15px; color: #333;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .dice.rolling { animation: shake 0.1s infinite; }
+        @keyframes shake { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+        .btn {
+            width: 100%; background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff; border: none; padding: 15px; font-size: 1.1em; font-weight: bold;
+            border-radius: 10px; cursor: pointer; transition: all 0.3s; margin-bottom: 10px;
+        }
+        .btn:hover:not(:disabled) { transform: scale(1.02); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-start { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .status { text-align: center; color: #aaa; font-size: 0.95em; line-height: 1.6; }
+        .rules { background: rgba(255,255,255,0.05); font-size: 0.85em; color: #888; line-height: 1.6; }
+        .rules h3 { color: #aaa; margin-bottom: 8px; }
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; justify-content: center;
+            align-items: center; z-index: 100;
+        }
+        .overlay.hidden { display: none; }
+        .modal { text-align: center; padding: 50px; }
+        .modal h2 { font-size: 2.5em; margin-bottom: 20px; }
+        .winner-red { color: #e74c3c; }
+        .winner-yellow { color: #f1c40f; }
+        .winner-blue { color: #3498db; }
+        .winner-green { color: #2ecc71; }
+        .modal p { color: #888; font-size: 1.2em; margin-bottom: 30px; }
+        .hint { background: rgba(255,193,7,0.2); border: 1px solid #ffc107; padding: 10px; border-radius: 8px; margin-top: 10px; color: #ffc107; font-size: 0.9em; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="board-wrapper">
+            <canvas id="board" width="560" height="560"></canvas>
+        </div>
+        <div class="side-panel">
+            <h1>✈️ 飞行棋</h1>
+            <div class="player-select" id="playerSelect">
+                <label>选择玩家人数</label>
+                <select id="playerCount">
+                    <option value="2">2 人 (红 vs 蓝)</option>
+                    <option value="4" selected>4 人</option>
+                </select>
+            </div>
+            <div class="turn-indicator hidden" id="turnArea">
+                <div class="turn-label">当前回合</div>
+                <div class="turn-text turn-red" id="turnText">红方</div>
+            </div>
+            <div class="dice-area">
+                <div class="dice" id="dice">?</div>
+                <button class="btn hidden" id="rollBtn" onclick="rollDice()">掷骰子</button>
+                <button class="btn btn-start" id="startBtn" onclick="startGame()">开始游戏</button>
+                <div class="hint hidden" id="selectHint">点击选择要移动的飞机</div>
+            </div>
+            <div class="status" id="status">选择玩家人数后开始游戏</div>
+            <div class="rules">
+                <h3>规则说明</h3>
+                • 掷到6起飞，可再掷一次<br>
+                • 踩到对方飞机将其打回<br>
+                • 走完一圈进入终点跑道<br>
+                • 全部飞机到终点获胜
+            </div>
+        </div>
+    </div>
+    <div class="overlay hidden" id="winnerOverlay">
+        <div class="modal">
+            <h2 id="winnerTitle"></h2>
+            <p>恭喜获得胜利！</p>
+            <button class="btn" onclick="resetGame()">再来一局</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('board');
+        const ctx = canvas.getContext('2d');
+        const SIZE = 560;
+        const GRID = 40;
+        const CX = SIZE / 2, CY = SIZE / 2;
+
+        const COLORS = { red: '#e74c3c', yellow: '#f1c40f', blue: '#3498db', green: '#2ecc71' };
+        const COLOR_NAMES = { red: '红方', yellow: '黄方', blue: '蓝方', green: '绿方' };
+
+        // 预计算所有路径点 - 正方形环形路径，共52格
+        const PATH = [];
+        function buildPath() {
+            if (PATH.length > 0) return;
+            const margin = 60;
+            const step = GRID;
+
+            // 底边：从左下往右 (红方起点在这)
+            for (let i = 0; i < 6; i++) PATH.push({ x: margin + 140 + i * step, y: SIZE - margin });
+            // 右下角往上
+            for (let i = 0; i < 5; i++) PATH.push({ x: SIZE - margin - 140 + 40, y: SIZE - margin - (i + 1) * step });
+            // 右边中间横插
+            PATH.push({ x: SIZE - margin - 100, y: CY + step });
+            PATH.push({ x: SIZE - margin - 60, y: CY + step });
+            PATH.push({ x: SIZE - margin, y: CY });
+            PATH.push({ x: SIZE - margin - 60, y: CY - step });
+            PATH.push({ x: SIZE - margin - 100, y: CY - step });
+            // 右上角往上
+            for (let i = 0; i < 5; i++) PATH.push({ x: SIZE - margin - 100, y: CY - step - (i + 1) * step });
+            // 顶边往左 (黄方起点)
+            for (let i = 0; i < 6; i++) PATH.push({ x: SIZE - margin - 140 - i * step, y: margin });
+            // 左上角往下
+            for (let i = 0; i < 5; i++) PATH.push({ x: margin + 100, y: margin + (i + 1) * step });
+            // 左边中间横插
+            PATH.push({ x: margin + 100, y: CY - step });
+            PATH.push({ x: margin + 60, y: CY - step });
+            PATH.push({ x: margin, y: CY });
+            PATH.push({ x: margin + 60, y: CY + step });
+            PATH.push({ x: margin + 100, y: CY + step });
+            // 左下角往下
+            for (let i = 0; i < 5; i++) PATH.push({ x: margin + 100, y: CY + step + (i + 1) * step });
+        }
+
+        // 简化：用固定的52格环形
+        function buildSimplePath() {
+            if (PATH.length > 0) return;
+            const r = 200; // 半径
+            for (let i = 0; i < 52; i++) {
+                const angle = (i / 52) * Math.PI * 2 - Math.PI / 2;
+                PATH.push({
+                    x: CX + Math.cos(angle) * r,
+                    y: CY + Math.sin(angle) * r
+                });
+            }
+        }
+
+        // 起点索引
+        const START_INDEX = { red: 0, yellow: 13, blue: 26, green: 39 };
+
+        // 基地位置
+        const BASE_POS = {
+            red:    [{ x: 90, y: 430 }, { x: 130, y: 430 }, { x: 90, y: 470 }, { x: 130, y: 470 }],
+            yellow: [{ x: 90, y: 90 },  { x: 130, y: 90 },  { x: 90, y: 130 }, { x: 130, y: 130 }],
+            blue:   [{ x: 430, y: 90 }, { x: 470, y: 90 }, { x: 430, y: 130 }, { x: 470, y: 130 }],
+            green:  [{ x: 430, y: 430 }, { x: 470, y: 430 }, { x: 430, y: 470 }, { x: 470, y: 470 }]
+        };
+
+        // 终点跑道
+        const RUNWAY = {
+            red: [], yellow: [], blue: [], green: []
+        };
+        function buildRunways() {
+            if (RUNWAY.red.length > 0) return;
+            for (let i = 1; i <= 6; i++) {
+                RUNWAY.red.push({ x: CX, y: CY + 170 - i * 28 });
+                RUNWAY.yellow.push({ x: CX, y: CY - 170 + i * 28 });
+                RUNWAY.blue.push({ x: CX + 170 - i * 28, y: CY });
+                RUNWAY.green.push({ x: CX - 170 + i * 28, y: CY });
+            }
+        }
+
+        let players = [];
+        let currentPlayerIndex = 0;
+        let diceValue = 0;
+        let gameStarted = false;
+        let waitingForPlaneSelect = false;
+        let movablePlanes = [];
+        let planes = {};
+
+        function initPlanes() {
+            planes = {};
+            players.forEach(color => {
+                planes[color] = [];
+                for (let i = 0; i < 4; i++) {
+                    planes[color].push({ state: 'base', pathIndex: -1, runwayIndex: -1, steps: 0 });
+                }
+            });
+        }
+
+        function startGame() {
+            const count = parseInt(document.getElementById('playerCount').value);
+            players = count === 2 ? ['red', 'blue'] : ['red', 'yellow', 'blue', 'green'];
+
+            buildSimplePath();
+            buildRunways();
+            initPlanes();
+
+            currentPlayerIndex = 0;
+            gameStarted = true;
+            waitingForPlaneSelect = false;
+
+            document.getElementById('playerSelect').classList.add('hidden');
+            document.getElementById('startBtn').classList.add('hidden');
+            document.getElementById('rollBtn').classList.remove('hidden');
+            document.getElementById('turnArea').classList.remove('hidden');
+
+            updateTurnDisplay();
+            setStatus('请掷骰子');
+            render();
+        }
+
+        function rollDice() {
+            if (!gameStarted || waitingForPlaneSelect) return;
+
+            const dice = document.getElementById('dice');
+            const rollBtn = document.getElementById('rollBtn');
+
+            rollBtn.disabled = true;
+            dice.classList.add('rolling');
+
+            let rolls = 0;
+            const interval = setInterval(() => {
+                dice.textContent = Math.floor(Math.random() * 6) + 1;
+                rolls++;
+                if (rolls > 12) {
+                    clearInterval(interval);
+                    dice.classList.remove('rolling');
+                    diceValue = Math.floor(Math.random() * 6) + 1;
+                    dice.textContent = diceValue;
+                    handleDiceResult();
+                }
+            }, 80);
+        }
+
+        function handleDiceResult() {
+            const color = players[currentPlayerIndex];
+            const playerPlanes = planes[color];
+
+            movablePlanes = [];
+            playerPlanes.forEach((plane, idx) => {
+                if (plane.state === 'base' && diceValue === 6) {
+                    movablePlanes.push(idx);
+                } else if (plane.state === 'flying') {
+                    // 检查是否能移动（不超过终点）
+                    if (plane.runwayIndex >= 0) {
+                        if (plane.runwayIndex + diceValue <= 5) movablePlanes.push(idx);
+                    } else {
+                        movablePlanes.push(idx);
+                    }
+                }
+            });
+
+            if (movablePlanes.length === 0) {
+                setStatus(`${COLOR_NAMES[color]} 没有可移动的飞机`);
+                setTimeout(() => nextTurn(), 1000);
+            } else if (movablePlanes.length === 1) {
+                movePlane(color, movablePlanes[0]);
+            } else {
+                waitingForPlaneSelect = true;
+                document.getElementById('selectHint').classList.remove('hidden');
+                setStatus(`请选择要移动的飞机`);
+                render();
+            }
+        }
+
+        function movePlane(color, planeIdx) {
+            const plane = planes[color][planeIdx];
+            waitingForPlaneSelect = false;
+            document.getElementById('selectHint').classList.add('hidden');
+
+            if (plane.state === 'base') {
+                plane.state = 'flying';
+                plane.pathIndex = START_INDEX[color];
+                plane.steps = 0;
+                setStatus(`${COLOR_NAMES[color]} 飞机起飞！`);
+                checkCapture(color, planeIdx);
+            } else if (plane.state === 'flying') {
+                if (plane.runwayIndex >= 0) {
+                    // 在跑道上
+                    plane.runwayIndex += diceValue;
+                    if (plane.runwayIndex >= 5) {
+                        plane.runwayIndex = 5;
+                        plane.state = 'finished';
+                        setStatus(`${COLOR_NAMES[color]} 飞机到达终点！`);
+                        checkWin(color);
+                    } else {
+                        setStatus(`${COLOR_NAMES[color]} 前进 ${diceValue} 步`);
+                    }
+                } else {
+                    // 在主路径上
+                    plane.steps += diceValue;
+
+                    if (plane.steps >= 50) {
+                        // 进入终点跑道
+                        const runwaySteps = plane.steps - 50;
+                        if (runwaySteps <= 5) {
+                            plane.runwayIndex = runwaySteps;
+                            if (runwaySteps >= 5) {
+                                plane.state = 'finished';
+                                setStatus(`${COLOR_NAMES[color]} 飞机到达终点！`);
+                                checkWin(color);
+                            } else {
+                                setStatus(`${COLOR_NAMES[color]} 进入跑道！`);
+                            }
+                        }
+                    } else {
+                        plane.pathIndex = (START_INDEX[color] + plane.steps) % 52;
+                        setStatus(`${COLOR_NAMES[color]} 前进 ${diceValue} 步`);
+                        checkCapture(color, planeIdx);
+                    }
+                }
+            }
+
+            render();
+
+            if (diceValue === 6 && plane.state !== 'finished') {
+                setTimeout(() => {
+                    setStatus(`${COLOR_NAMES[color]} 掷到6，再来一次！`);
+                    document.getElementById('rollBtn').disabled = false;
+                }, 500);
+            } else {
+                setTimeout(() => nextTurn(), 800);
+            }
+        }
+
+        function checkCapture(color, planeIdx) {
+            const plane = planes[color][planeIdx];
+            if (plane.runwayIndex >= 0 || plane.state !== 'flying') return;
+
+            players.forEach(otherColor => {
+                if (otherColor === color) return;
+                planes[otherColor].forEach((otherPlane) => {
+                    if (otherPlane.state === 'flying' && otherPlane.runwayIndex < 0) {
+                        if (otherPlane.pathIndex === plane.pathIndex) {
+                            otherPlane.state = 'base';
+                            otherPlane.pathIndex = -1;
+                            otherPlane.steps = 0;
+                            otherPlane.runwayIndex = -1;
+                            setStatus(`${COLOR_NAMES[color]} 击落了 ${COLOR_NAMES[otherColor]}！`);
+                        }
+                    }
+                });
+            });
+        }
+
+        function checkWin(color) {
+            if (planes[color].every(p => p.state === 'finished')) {
+                setTimeout(() => showWinner(color), 500);
+            }
+        }
+
+        function nextTurn() {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            updateTurnDisplay();
+            document.getElementById('rollBtn').disabled = false;
+            setStatus('请掷骰子');
+        }
+
+        function updateTurnDisplay() {
+            const color = players[currentPlayerIndex];
+            const el = document.getElementById('turnText');
+            el.textContent = COLOR_NAMES[color];
+            el.className = `turn-text turn-${color}`;
+        }
+
+        function setStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+
+        function showWinner(color) {
+            const title = document.getElementById('winnerTitle');
+            title.textContent = `${COLOR_NAMES[color]} 获胜！`;
+            title.className = `winner-${color}`;
+            document.getElementById('winnerOverlay').classList.remove('hidden');
+        }
+
+        function resetGame() {
+            document.getElementById('winnerOverlay').classList.add('hidden');
+            document.getElementById('playerSelect').classList.remove('hidden');
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('rollBtn').classList.add('hidden');
+            document.getElementById('turnArea').classList.add('hidden');
+            document.getElementById('dice').textContent = '?';
+            gameStarted = false;
+            setStatus('选择玩家人数后开始游戏');
+            render();
+        }
+
+        function drawBoard() {
+            // 背景
+            ctx.fillStyle = '#f0e6d3';
+            ctx.fillRect(0, 0, SIZE, SIZE);
+
+            // 四个基地区域
+            const bases = [
+                { color: 'red', x: 40, y: 380 },
+                { color: 'yellow', x: 40, y: 40 },
+                { color: 'blue', x: 380, y: 40 },
+                { color: 'green', x: 380, y: 380 }
+            ];
+
+            bases.forEach(base => {
+                ctx.fillStyle = COLORS[base.color] + '30';
+                ctx.strokeStyle = COLORS[base.color];
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.roundRect(base.x, base.y, 140, 140, 15);
+                ctx.fill();
+                ctx.stroke();
+
+                BASE_POS[base.color].forEach(pos => {
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 16, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = COLORS[base.color];
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            });
+
+            // 主路径
+            buildSimplePath();
+            PATH.forEach((pos, idx) => {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 14, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ccc';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 起点高亮
+                Object.entries(START_INDEX).forEach(([color, startIdx]) => {
+                    if (idx === startIdx) {
+                        ctx.fillStyle = COLORS[color];
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, 14, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+            });
+
+            // 终点跑道
+            buildRunways();
+            ['red', 'yellow', 'blue', 'green'].forEach(color => {
+                RUNWAY[color].forEach((pos) => {
+                    ctx.fillStyle = COLORS[color] + '50';
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = COLORS[color];
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            });
+
+            // 中心终点
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(CX, CY, 35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('终点', CX, CY);
+        }
+
+        function drawPlanes() {
+            if (!gameStarted) return;
+
+            players.forEach(color => {
+                planes[color].forEach((plane, idx) => {
+                    let pos = null;
+
+                    if (plane.state === 'base') {
+                        pos = BASE_POS[color][idx];
+                    } else if (plane.state === 'flying') {
+                        if (plane.runwayIndex >= 0 && plane.runwayIndex < RUNWAY[color].length) {
+                            pos = RUNWAY[color][plane.runwayIndex];
+                        } else if (plane.pathIndex >= 0 && plane.pathIndex < PATH.length) {
+                            pos = PATH[plane.pathIndex];
+                        }
+                    } else if (plane.state === 'finished') {
+                        // 终点位置，稍微分散
+                        const offset = idx * 8 - 12;
+                        pos = { x: CX + offset, y: CY + offset };
+                    }
+
+                    if (!pos) return;
+
+                    // 可选高亮
+                    if (waitingForPlaneSelect && movablePlanes.includes(idx) && color === players[currentPlayerIndex]) {
+                        ctx.strokeStyle = '#ffcc00';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+
+                    // 飞机
+                    ctx.fillStyle = COLORS[color];
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 14, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('✈', pos.x, pos.y);
+                });
+            });
+        }
+
+        function render() {
+            drawBoard();
+            drawPlanes();
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!waitingForPlaneSelect) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (SIZE / rect.width);
+            const y = (e.clientY - rect.top) * (SIZE / rect.height);
+
+            const color = players[currentPlayerIndex];
+
+            for (const idx of movablePlanes) {
+                const plane = planes[color][idx];
+                let pos = null;
+
+                if (plane.state === 'base') {
+                    pos = BASE_POS[color][idx];
+                } else if (plane.state === 'flying') {
+                    if (plane.runwayIndex >= 0) {
+                        pos = RUNWAY[color][plane.runwayIndex];
+                    } else {
+                        pos = PATH[plane.pathIndex];
+                    }
+                }
+
+                if (pos) {
+                    const dist = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
+                    if (dist < 25) {
+                        movePlane(color, idx);
+                        return;
+                    }
+                }
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>

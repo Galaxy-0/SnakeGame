@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>双人乒乓球</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .game-container {
+            text-align: center;
+        }
+        h1 {
+            color: #fff;
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        .score-board {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 60px;
+            margin-bottom: 20px;
+        }
+        .player-score {
+            text-align: center;
+        }
+        .player-label {
+            font-size: 1em;
+            margin-bottom: 5px;
+        }
+        .player1-label { color: #ff6b6b; }
+        .player2-label { color: #4ecca3; }
+        .score {
+            font-size: 3em;
+            font-weight: bold;
+        }
+        .player1-score { color: #ff6b6b; text-shadow: 0 0 15px rgba(255, 107, 107, 0.5); }
+        .player2-score { color: #4ecca3; text-shadow: 0 0 15px rgba(78, 204, 163, 0.5); }
+        .vs {
+            color: #666;
+            font-size: 1.5em;
+        }
+        canvas {
+            border: 3px solid #333;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding: 0 20px;
+        }
+        .control-info {
+            color: #888;
+            font-size: 0.9em;
+        }
+        .control-info span {
+            display: inline-block;
+            background: #333;
+            padding: 5px 12px;
+            border-radius: 5px;
+            margin: 0 3px;
+            color: #fff;
+        }
+        .player1-controls span { border: 1px solid #ff6b6b; }
+        .player2-controls span { border: 1px solid #4ecca3; }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .overlay.hidden {
+            display: none;
+        }
+        .modal {
+            text-align: center;
+            padding: 50px;
+        }
+        .modal h2 {
+            color: #fff;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+        .modal p {
+            color: #aaa;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+        }
+        .winner-text {
+            font-size: 1.5em !important;
+            margin-bottom: 10px !important;
+        }
+        .winner-player1 { color: #ff6b6b !important; }
+        .winner-player2 { color: #4ecca3 !important; }
+        .btn {
+            background: linear-gradient(135deg, #4ecca3, #3db892);
+            color: #1a1a2e;
+            border: none;
+            padding: 18px 50px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(78, 204, 163, 0.5);
+        }
+        .start-hint {
+            color: #666;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🏓 双人乒乓球</h1>
+        <div class="score-board">
+            <div class="player-score">
+                <div class="player-label player1-label">玩家 1</div>
+                <div class="score player1-score" id="score1">0</div>
+            </div>
+            <div class="vs">VS</div>
+            <div class="player-score">
+                <div class="player-label player2-label">玩家 2</div>
+                <div class="score player2-score" id="score2">0</div>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div class="controls">
+            <div class="control-info player1-controls">
+                玩家1: <span>W</span> 上 <span>S</span> 下
+            </div>
+            <div class="control-info player2-controls">
+                玩家2: <span>↑</span> 上 <span>↓</span> 下
+            </div>
+        </div>
+    </div>
+
+    <!-- 开始界面 -->
+    <div class="overlay" id="startOverlay">
+        <div class="modal">
+            <h2>🏓 双人乒乓球</h2>
+            <p>先得 7 分者获胜！</p>
+            <button class="btn" onclick="startGame()">开始游戏</button>
+            <p class="start-hint">玩家1: W/S 控制 &nbsp;|&nbsp; 玩家2: ↑/↓ 控制</p>
+        </div>
+    </div>
+
+    <!-- 游戏结束界面 -->
+    <div class="overlay hidden" id="endOverlay">
+        <div class="modal">
+            <h2>游戏结束</h2>
+            <p class="winner-text" id="winnerText"></p>
+            <p id="finalScore"></p>
+            <button class="btn" onclick="restartGame()">再来一局</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 游戏配置
+        const config = {
+            paddleWidth: 12,
+            paddleHeight: 100,
+            ballSize: 15,
+            paddleSpeed: 7,
+            initialBallSpeed: 4,
+            maxBallSpeed: 7,
+            winScore: 7
+        };
+
+        // 游戏状态
+        let gameRunning = false;
+        let score1 = 0;
+        let score2 = 0;
+
+        // 球拍
+        const paddle1 = {
+            x: 30,
+            y: canvas.height / 2 - config.paddleHeight / 2,
+            dy: 0
+        };
+
+        const paddle2 = {
+            x: canvas.width - 30 - config.paddleWidth,
+            y: canvas.height / 2 - config.paddleHeight / 2,
+            dy: 0
+        };
+
+        // 球
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            dx: config.initialBallSpeed,
+            dy: config.initialBallSpeed * (Math.random() - 0.5),
+            speed: config.initialBallSpeed
+        };
+
+        // 特效粒子
+        let particles = [];
+
+        // 按键状态
+        const keys = {};
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            // 防止方向键滚动页面
+            if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        function startGame() {
+            document.getElementById('startOverlay').classList.add('hidden');
+            gameRunning = true;
+            resetBall();
+            gameLoop();
+        }
+
+        function restartGame() {
+            score1 = 0;
+            score2 = 0;
+            document.getElementById('score1').textContent = '0';
+            document.getElementById('score2').textContent = '0';
+            document.getElementById('endOverlay').classList.add('hidden');
+            resetBall();
+            resetPaddles();
+            gameRunning = true;
+            gameLoop();
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speed = config.initialBallSpeed;
+            // 随机方向
+            const direction = Math.random() > 0.5 ? 1 : -1;
+            ball.dx = direction * ball.speed;
+            ball.dy = (Math.random() - 0.5) * ball.speed;
+        }
+
+        function resetPaddles() {
+            paddle1.y = canvas.height / 2 - config.paddleHeight / 2;
+            paddle2.y = canvas.height / 2 - config.paddleHeight / 2;
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 8,
+                    dy: (Math.random() - 0.5) * 8,
+                    life: 1,
+                    color: color
+                });
+            }
+        }
+
+        function updateParticles() {
+            particles = particles.filter(p => {
+                p.x += p.dx;
+                p.y += p.dy;
+                p.life -= 0.03;
+                return p.life > 0;
+            });
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4 * p.life, 0, Math.PI * 2);
+                ctx.fillStyle = p.color.replace(')', `, ${p.life})`).replace('rgb', 'rgba');
+                ctx.fill();
+            });
+        }
+
+        function update() {
+            // 更新球拍位置
+            if (keys['w'] || keys['W']) paddle1.dy = -config.paddleSpeed;
+            else if (keys['s'] || keys['S']) paddle1.dy = config.paddleSpeed;
+            else paddle1.dy = 0;
+
+            if (keys['ArrowUp']) paddle2.dy = -config.paddleSpeed;
+            else if (keys['ArrowDown']) paddle2.dy = config.paddleSpeed;
+            else paddle2.dy = 0;
+
+            paddle1.y += paddle1.dy;
+            paddle2.y += paddle2.dy;
+
+            // 限制球拍在画布内
+            paddle1.y = Math.max(0, Math.min(canvas.height - config.paddleHeight, paddle1.y));
+            paddle2.y = Math.max(0, Math.min(canvas.height - config.paddleHeight, paddle2.y));
+
+            // 更新球位置
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // 上下边界反弹
+            if (ball.y - config.ballSize / 2 <= 0 || ball.y + config.ballSize / 2 >= canvas.height) {
+                ball.dy = -ball.dy;
+                ball.y = ball.y - config.ballSize / 2 <= 0 ? config.ballSize / 2 : canvas.height - config.ballSize / 2;
+            }
+
+            // 球拍碰撞检测
+            // 左边球拍
+            if (ball.x - config.ballSize / 2 <= paddle1.x + config.paddleWidth &&
+                ball.x + config.ballSize / 2 >= paddle1.x &&
+                ball.y >= paddle1.y && ball.y <= paddle1.y + config.paddleHeight) {
+
+                ball.x = paddle1.x + config.paddleWidth + config.ballSize / 2;
+                ball.dx = Math.abs(ball.dx);
+
+                // 根据击球位置改变角度
+                const hitPos = (ball.y - paddle1.y) / config.paddleHeight;
+                ball.dy = (hitPos - 0.5) * ball.speed * 1.5;
+
+                // 加速
+                if (ball.speed < config.maxBallSpeed) {
+                    ball.speed += 0.15;
+                    ball.dx = ball.dx > 0 ? ball.speed : -ball.speed;
+                }
+
+                createParticles(ball.x, ball.y, 'rgb(255, 107, 107)');
+            }
+
+            // 右边球拍
+            if (ball.x + config.ballSize / 2 >= paddle2.x &&
+                ball.x - config.ballSize / 2 <= paddle2.x + config.paddleWidth &&
+                ball.y >= paddle2.y && ball.y <= paddle2.y + config.paddleHeight) {
+
+                ball.x = paddle2.x - config.ballSize / 2;
+                ball.dx = -Math.abs(ball.dx);
+
+                const hitPos = (ball.y - paddle2.y) / config.paddleHeight;
+                ball.dy = (hitPos - 0.5) * ball.speed * 1.5;
+
+                if (ball.speed < config.maxBallSpeed) {
+                    ball.speed += 0.15;
+                    ball.dx = ball.dx > 0 ? ball.speed : -ball.speed;
+                }
+
+                createParticles(ball.x, ball.y, 'rgb(78, 204, 163)');
+            }
+
+            // 得分检测
+            if (ball.x < 0) {
+                score2++;
+                document.getElementById('score2').textContent = score2;
+                checkWin();
+                if (gameRunning) resetBall();
+            } else if (ball.x > canvas.width) {
+                score1++;
+                document.getElementById('score1').textContent = score1;
+                checkWin();
+                if (gameRunning) resetBall();
+            }
+
+            updateParticles();
+        }
+
+        function checkWin() {
+            if (score1 >= config.winScore || score2 >= config.winScore) {
+                gameRunning = false;
+                const winner = score1 >= config.winScore ? 1 : 2;
+                const winnerText = document.getElementById('winnerText');
+                winnerText.textContent = `玩家 ${winner} 获胜！`;
+                winnerText.className = `winner-text winner-player${winner}`;
+                document.getElementById('finalScore').textContent = `最终比分: ${score1} : ${score2}`;
+                document.getElementById('endOverlay').classList.remove('hidden');
+            }
+        }
+
+        function draw() {
+            // 清空画布
+            ctx.fillStyle = '#0f0f23';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制中线
+            ctx.setLineDash([15, 15]);
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 绘制粒子
+            drawParticles();
+
+            // 绘制球拍1（红色）
+            ctx.fillStyle = '#ff6b6b';
+            ctx.shadowColor = '#ff6b6b';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.roundRect(paddle1.x, paddle1.y, config.paddleWidth, config.paddleHeight, 6);
+            ctx.fill();
+
+            // 绘制球拍2（绿色）
+            ctx.fillStyle = '#4ecca3';
+            ctx.shadowColor = '#4ecca3';
+            ctx.beginPath();
+            ctx.roundRect(paddle2.x, paddle2.y, config.paddleWidth, config.paddleHeight, 6);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+
+            // 绘制球
+            const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, config.ballSize);
+            gradient.addColorStop(0, '#fff');
+            gradient.addColorStop(1, '#aaa');
+            ctx.fillStyle = gradient;
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, config.ballSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // 球的拖尾效果
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.beginPath();
+            ctx.arc(ball.x - ball.dx, ball.y - ball.dy, config.ballSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 初始绘制
+        draw();
+    </script>
+</body>
+</html>
